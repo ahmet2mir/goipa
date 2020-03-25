@@ -3,6 +3,7 @@ package ipa
 import (
 	"encoding/json"
 	"errors"
+	"log"
 )
 
 type GroupRecord struct {
@@ -10,6 +11,8 @@ type GroupRecord struct {
 	Description  IpaString `json:"description"`
 	Gid          IpaString `json:"cn"`
 	GidNumber    IpaString `json:"gidnumber"`
+	Groups       []string  `json:"memberof_group"`
+	GroupMembers []string  `json:"member_group"`
 	MepManagedBy IpaString `json:"mepmanagedby"`
 	IpaUniqueId  IpaString `json:"ipauniqueid"`
 	Users        []string  `json:"member_user"`
@@ -24,6 +27,8 @@ func (c *Client) GetGroup(gid string) (*GroupRecord, error) {
 
 	res, err := c.rpc("group_show", []string{gid}, options)
 
+	log.Print("[DEBUG] GetGroup %d", gid)
+
 	if err != nil {
 		return nil, err
 	}
@@ -33,6 +38,8 @@ func (c *Client) GetGroup(gid string) (*GroupRecord, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Print("[DEBUG] GetGroup Unmarshal %d", groupRec)
+
 	return &groupRec, nil
 }
 
@@ -133,12 +140,20 @@ func (c *Client) GroupRemoveUser(gid string, uid string) (error) {
 	return c.GroupRemoveMember(gid, uid, "user")
 }
 
+func (c *Client) GroupRemoveGroup(gid string, sgid string) (error) {
+	return c.GroupRemoveMember(gid, sgid, "group")
+}
+
 func (c *Client) GroupRemoveUsers(gid string, uids []string) (error) {
 	return c.GroupRemoveMembers(gid, uids, "user")
 }
 
 func (c *Client) GroupAddUser(gid string, uid string) (error) {
 	return c.GroupAddMember(gid, uid, "user")
+}
+
+func (c *Client) GroupAddGroup(gid string, sgid string) (error) {
+	return c.GroupAddMember(gid, sgid, "group")
 }
 
 func (c *Client) CreateGroup(gid string, description string, options map[string]interface{}) (*GroupRecord, error) {
@@ -169,4 +184,54 @@ func (c *Client) DeleteGroup(gid string) (error) {
 	_, err := c.rpc("group_del", []string{gid}, options)
 
 	return err
+}
+
+func (c *Client) GroupSyncGroups(gid string, desired []string, reverse bool) (error) {
+	rec, err := c.GetGroup(gid)
+	if err != nil {
+		return err
+	}
+
+	if reverse {
+		current := rec.GroupMembers
+
+		toAdd := difference(desired, current)
+		toRemove := difference(current, desired)
+
+		for _, group := range toAdd {
+			err = c.GroupAddGroup(gid, group)
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, group := range toRemove {
+			err = c.GroupRemoveGroup(gid, group)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		current := rec.Groups
+
+		toAdd := difference(desired, current)
+		toRemove := difference(current, desired)
+
+		for _, group := range toAdd {
+			err = c.GroupAddGroup(group, gid)
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, group := range toRemove {
+			err = c.GroupRemoveGroup(group, gid)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+
+	return nil
 }

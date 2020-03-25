@@ -77,6 +77,24 @@ func (c *LdapClient) GetUserForUUID(uuid string) (*string, error) {
 	return &uid, nil
 }
 
+func (c *LdapClient) GetUserForUsername(username string) (*string, error) {
+	sr, err := c.Search("cn=users,cn=accounts",
+		fmt.Sprintf("(uid=%s)", username),
+		[]string{"uid"})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sr.Entries) != 1 {
+		return nil, errors.New("too many entries returned")
+	}
+
+	uid := sr.Entries[0].GetAttributeValue("uid")
+
+	return &uid, nil
+}
+
 
 func (c *LdapClient) UserExistsForUUID(uuid string) (bool, error) {
 	sr, err := c.Search("cn=users,cn=accounts",
@@ -92,6 +110,24 @@ func (c *LdapClient) UserExistsForUUID(uuid string) (bool, error) {
 	}
 
 	return len(sr.Entries) == 1, nil
+}
+
+func (c *LdapClient) GetGroupForGroupname(groupname string) (*string, error) {
+	sr, err := c.Search("cn=groups,cn=accounts",
+		fmt.Sprintf("(cn=%s)", groupname),
+		[]string{"cn"})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sr.Entries) != 1 {
+		return nil, errors.New("too many entries returned")
+	}
+
+	gid := sr.Entries[0].GetAttributeValue("cn")
+
+	return &gid, nil
 }
 
 func (c *LdapClient) GetGroupForUUID(uuid string) (*string, error) {
